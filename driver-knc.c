@@ -374,6 +374,8 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 {
 	int ret = 0;
 	struct knc_state *knc = driver_data;
+	struct knc_die_info die_info = {};
+	int die, core;
 
 	applog(LOG_NOTICE, "KnC: %s die, ASIC id=%d, DIE id=%d", enable ? "enable" : "disable", asic_id, die_id);
 
@@ -382,6 +384,55 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 	if (asic_id < 0 || asic_id >= MAX_ASICS || die_id < 0 || die_id >= DIES_PER_ASIC) {
 		ret = EINVAL;
 		goto out_unlock;
+	}
+
+	/* Send GETINFO to a die to detect if it is usable */
+	if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
+		if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
+			ret = ENODEV;
+			goto out_unlock;
+		}
+	} else {
+		ret = ENODEV;
+		goto out_unlock;
+	}
+
+	for (die = 0; die < knc->dies; ++die) {
+		if (knc->die[die].channel != asic_id || knc->die[die].die != die_id)
+			continue;
+
+		if (!enable) {
+			// TODO: move cores and pointers
+			knc->cores -= knc->die[die].cores;
+			--knc->dies;
+			memmove(&(knc->die[die]), &(knc->die[die + 1]), (knc->dies - die - 1) * sizeof(struct knc_die));
+		}
+
+		ret = 0;
+		goto out_unlock;
+	}
+
+	if (enable) {
+		knc = realloc(knc, sizeof(*knc) + (knc->cores + die_info.cores) * sizeof(struct knc_core_state));
+		memset(&(knc->core[knc->cores]), 0, die_info.cores * sizeof(struct knc_core_state));
+		int next_die = knc->dies;
+
+		knc->die[next_die].channel = asic_id;
+		knc->die[next_die].die = die_id;
+		knc->die[next_die].version = die_info.version;
+		knc->die[next_die].cores = die_info.cores;
+		knc->die[next_die].core = &(knc->core[knc->cores]);
+		knc->die[next_die].knc = knc;
+
+		for (core = 0; core < knc->die[next_die].cores; ++core) {
+			knc->die[next_die].core[core].die = &knc->die[next_die];
+			knc->die[next_die].core[core].core = core;
+		}
+
+		for (core = knc->cores; core < (knc->cores + die_info.cores); ++core)
+			knc->core[core].coreid = core;
+		++knc->dies;
+		knc->cores += die_info.cores;
 	}
 
 out_unlock:

@@ -9,11 +9,6 @@
  * any later version.  See COPYING for more details.
  */
 
-#define	MAX_ASICS		6
-#define	NUM_DIES_IN_ASIC	4
-#define	CORES_IN_DIE		48
-#define	CORES_PER_ASIC		(NUM_DIES_IN_ASIC * CORES_IN_DIE)
-
 #define	MAX_BYTES_IN_SPI_XSFER	4096
 
 void *knc_trnsp_new(int dev_idx);

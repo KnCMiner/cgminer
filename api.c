@@ -28,6 +28,7 @@
 
 #ifdef USE_KNC
 #include "knc-transport.h"
+#include "knc-asic.h"
 #endif
 
 #if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || \
@@ -4104,7 +4105,7 @@ static void knc_configure_die(struct io_data *io_data, __maybe_unused SOCKETTYPE
 			(*scolon++) = 0;
 
 			asic_id = atoi(semi);
-			if (asic_id < 0 || asic_id >= MAX_ASICS) {
+			if (asic_id < 0 || asic_id >= KNC_MAX_ASICS) {
 				message(io_data, MSG_INVASC, asic_id, NULL, isjson);
 				return;
 			}
@@ -4130,7 +4131,7 @@ static void knc_configure_die(struct io_data *io_data, __maybe_unused SOCKETTYPE
 			(*scolon++) = 0;
 
 			die_id = atoi(semi);
-			if (die_id < 0 || die_id >= NUM_DIES_IN_ASIC) {
+			if (die_id < 0 || die_id >= KNC_DIES_PER_ASIC) {
 				message(io_data, MSG_INVDIE, die_id, NULL, isjson);
 			}
 			param = scolon;

@@ -26,6 +26,10 @@
 #include "util.h"
 #include "klist.h"
 
+#ifdef USE_KNC
+#include "knc-transport.h"
+#endif
+
 #if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || \
 	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
@@ -254,6 +258,10 @@ static const char *OSINFO =
 #define _USBSTATS	"USBSTATS"
 #define _LCD		"LCD"
 
+#ifdef USE_KNC
+#define _KNC_DIE    "KNC_DIE"
+#endif
+
 static const char ISJSON = '{';
 #define JSON0		"{"
 #define JSON1		"\""
@@ -297,6 +305,10 @@ static const char ISJSON = '{';
 #define JSON_END	JSON4 JSON5
 #define JSON_END_TRUNCATED	JSON4_TRUNCATED JSON5
 #define JSON_BETWEEN_JOIN	","
+
+#ifdef USE_KNC
+#define JSON_KNC_DIE JSON1 _KNC_DIE JSON2
+#endif
 
 static const char *JSON_COMMAND = "command";
 static const char *JSON_PARAMETER = "parameter";
@@ -422,6 +434,14 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_LOCKOK 123
 #define MSG_LOCKDIS 124
 #define MSG_LCD 125
+
+#ifdef USE_KNC
+#define MSG_DIECHANGEOK 126
+#define MSG_DIECHANGEERR 127
+#define MSG_INVDIE 128
+#define MSG_DIEWRONGFORMAT 129
+#define MSG_DIEWRONGPARAM 130
+#endif /* USE_KNC */
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -590,6 +610,12 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_LCD,	PARAM_NONE,	"LCD" },
  { SEVERITY_SUCC,  MSG_LOCKOK,	PARAM_NONE,	"Lock stats created" },
  { SEVERITY_WARN,  MSG_LOCKDIS,	PARAM_NONE,	"Lock stats not enabled" },
+#ifdef USE_KNC
+ { SEVERITY_SUCC,  MSG_DIECHANGEOK, PARAM_STR, "Die was successfully %s" },
+ { SEVERITY_ERR,   MSG_DIECHANGEERR, PARAM_NONE, "Failed to change die state" },
+ { SEVERITY_ERR,   MSG_INVDIE, PARAM_INT, "Invalid DIE id %d - range is 0..3" },
+ { SEVERITY_ERR,   MSG_DIEWRONGFORMAT, PARAM_STR, "Wrong format.Format should be: ASIC=N;DIE=N;MODE:ENABLE;" },
+#endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -4047,6 +4073,135 @@ static void lcddata(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
+#ifdef USE_KNC
+static void knc_configure_die(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+		return;
+	}
+
+	// command format: ASIC:N;DIE:N;MODE:ENABLE|DISABLE;
+	char *semi = NULL, *scolon = NULL;
+	int asic_id = -1, die_id = -1;
+	bool enable = false;
+
+	semi = strchr(param, ':'); // ASIC:N;
+	if (semi == NULL || *semi == '\0') {
+		message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+		return;
+	} else {
+		(*semi++) = '\0';
+		if (strcmp(param, "ASIC") != 0) {
+			message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+			return;
+		} else {
+			scolon = strchr(semi, ';');
+			if (scolon == NULL || *scolon == '\0') {
+				message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+				return;
+			}
+			(*scolon++) = 0;
+
+			asic_id = atoi(semi);
+			if (asic_id < 0 || asic_id >= MAX_ASICS) {
+				message(io_data, MSG_INVASC, asic_id, NULL, isjson);
+				return;
+			}
+			param = scolon;
+		}
+	}
+
+	semi = strchr(param, ':'); // DIE:N;
+	if (semi == NULL && *semi == '\0') {
+		message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+		return;
+	} else {
+		(*semi++) = '\0';
+		if (strcmp(param, "DIE") != 0) {
+			message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+			return;
+		} else {
+			scolon = strchr(semi, ';');
+			if (scolon == NULL || *scolon == '\0') {
+				message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+				return;
+			}
+			(*scolon++) = 0;
+
+			die_id = atoi(semi);
+			if (die_id < 0 || die_id >= NUM_DIES_IN_ASIC) {
+				message(io_data, MSG_INVDIE, die_id, NULL, isjson);
+			}
+			param = scolon;
+		}
+	}
+
+	semi = strchr(param, ':'); // MODE:{ENABLE|DISABLE};
+	if (semi == NULL && *semi == '\0') {
+		message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+		return;
+	} else {
+		(*semi++) = '\0';
+		if (strcmp(param, "MODE") != 0) {
+			message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+			return;
+		} else {
+			scolon = strchr(semi, ';');
+			if (scolon == NULL || *scolon == '\0') {
+				message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+				return;
+			}
+			
+			(*scolon++) = 0;
+			if (strcmp(semi, "ENABLE") == 0) {
+				enable = true;
+			} else if (strcmp(semi, "DISABLE") == 0) {
+				enable = false;
+			} else {
+				message(io_data, MSG_DIEWRONGFORMAT, 0, NULL, isjson);
+				return;
+			}
+		}
+	}
+
+	int i;
+	struct thr_info *thr = NULL;
+	int ret;
+	struct api_data *root = NULL;
+	bool io_open;
+
+	for (i = 0; i < mining_threads; i++) {
+		thr = get_thread(i);
+		if (thr->cgpu->drv->drv_id != DRIVER_knc)
+			continue;
+
+		ret = knc_change_die_state(thr->cgpu->device_data, asic_id, die_id, enable);
+		if (ret != 0) {
+			message(io_data, MSG_DIECHANGEERR, 0, NULL, isjson);
+			return;
+		}
+
+		if (isjson)
+			io_open = io_add(io_data, COMSTR JSON_KNC_DIE);
+				
+		root = api_add_int(root, _STATUS, &ret, false);
+		root = api_add_int(root, "ASIC", &asic_id, false);
+		root = api_add_int(root, "DIE", &die_id, false);
+		root = api_add_bool(root, "MODE", &enable, false);
+		print_data(io_data, root, isjson, false);
+	}
+	
+	if (root)
+		message(io_data, MSG_DIECHANGEOK, 0, enable ? "enabled": "disabled", isjson);
+	else
+		message(io_data, MSG_DIECHANGEERR, 0, NULL, isjson);
+
+	if (isjson && io_open)
+		io_close(io_data);
+}
+#endif
+
 struct CMDS {
 	char *name;
 	void (*func)(struct io_data *, SOCKETTYPE, char *, bool, char);
@@ -4102,6 +4257,9 @@ struct CMDS {
 	{ "asccount",		asccount,	false,	true },
 	{ "lcd",		lcddata,	false,	true },
 	{ "lockstats",		lockstats,	true,	true },
+#ifdef USE_KNC
+	{ "knc-configure-die",   knc_configure_die,	true, true },
+#endif
 	{ NULL,			NULL,		false,	false }
 };
 

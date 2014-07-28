@@ -370,6 +370,25 @@ static bool knc_detect_one(void *ctx)
 	return true;
 }
 
+int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable)
+{
+	int ret = 0;
+	struct knc_state *knc = driver_data;
+
+	applog(LOG_NOTICE, "KnC: %s die, ASIC id=%d, DIE id=%d", enable ? "enable" : "disable", asic_id, die_id);
+
+	mutex_lock(&knc->state_lock);
+
+	if (asic_id < 0 || asic_id >= MAX_ASICS || die_id < 0 || die_id >= DIES_PER_ASIC) {
+		ret = EINVAL;
+		goto out_unlock;
+	}
+
+out_unlock:
+	mutex_unlock(&knc->state_lock);
+	return ret;
+}
+
 /* Probe devices and register with add_cgpu */
 void knc_detect(bool __maybe_unused hotplug)
 {

@@ -369,7 +369,7 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 	int ret = 0;
 	struct knc_state *knc = driver_data;
 	struct knc_die_info die_info = {};
-	int die, core;
+	int die, next_die, core;
 
 	applog(LOG_NOTICE, "KnC: %s die, ASIC id=%d, DIE id=%d", enable ? "enable" : "disable", asic_id, die_id);
 
@@ -398,10 +398,33 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 			continue;
 
 		if (!enable) {
-			// TODO: move cores and pointers
-			knc->cores -= knc->die[die].cores;
+			int deleted_cores = knc->die[die].cores;
+			knc->cores -= deleted_cores;
 			--knc->dies;
-			memmove(&(knc->die[die]), &(knc->die[die + 1]), (knc->dies - die - 1) * sizeof(struct knc_die));
+
+			struct knc_core_state *pcore_to = knc->die[die].core;
+			struct knc_core_state *pcore_from = pcore_to + knc->die[die].cores;
+			int core_move_count = &(knc->core[knc->cores]) - pcore_to;
+			assert(core_move_count >= 0);
+			memmove(pcore_to, pcore_from, core_move_count * sizeof(struct knc_core_state));
+
+			struct knc_die *pdie_to = &(knc->die[die]);
+			struct knc_die *pdie_from = pdie_to + 1;
+			int die_move_count = knc->dies - die;
+			assert(die_move_count >= 0);
+			memmove(pdie_to, pdie_from, die_move_count * sizeof(struct knc_die));
+
+			/* Now fix pointers */
+			for (next_die = 0; next_die < knc->dies; ++next_die) {
+				assert(knc->die[next_die].core != pcore_to);
+				if (knc->die[next_die].core > pcore_to)
+					knc->die[next_die].core -= deleted_cores;
+			}
+			for (core = 0; core < knc->cores; ++core) {
+				assert(knc->core[core].die != pdie_to);
+				if (knc->core[core].die > pdie_to)
+					--(knc->core[core].die);
+			}
 		}
 
 		ret = 0;

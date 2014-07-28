@@ -380,15 +380,17 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 		goto out_unlock;
 	}
 
-	/* Send GETINFO to a die to detect if it is usable */
-	if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
-		if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
+	if (enable) {
+		/* Send GETINFO to a die to detect if it is usable */
+		if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
+			if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
+				ret = ENODEV;
+				goto out_unlock;
+			}
+		} else {
 			ret = ENODEV;
 			goto out_unlock;
 		}
-	} else {
-		ret = ENODEV;
-		goto out_unlock;
 	}
 
 	for (die = 0; die < knc->dies; ++die) {

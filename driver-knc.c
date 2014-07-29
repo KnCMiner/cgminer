@@ -385,12 +385,22 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 			continue;
 
 		if (!enable) {
+			int slot, buffer, resp;
 			int deleted_cores = knc->die[die].cores;
 			knc->cores -= deleted_cores;
 			--knc->dies;
 
 			struct knc_core_state *pcore_to = knc->die[die].core;
 			struct knc_core_state *pcore_from = pcore_to + knc->die[die].cores;
+			struct knc_core_state *pcore;
+
+			for (pcore = pcore_to; pcore < pcore_from; ++pcore) {
+				for (slot = 0; slot < WORKS_PER_CORE; ++slot) {
+					if (pcore->workslot[slot].work)
+						free_work(pcore->workslot[slot].work);
+				}
+			}
+
 			int core_move_count = &(knc->core[knc->cores]) - pcore_to;
 			assert(core_move_count >= 0);
 			memmove(pcore_to, pcore_from, core_move_count * sizeof(struct knc_core_state));
@@ -411,6 +421,17 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 				assert(knc->core[core].die != pdie_to);
 				if (knc->core[core].die > pdie_to)
 					--(knc->core[core].die);
+			}
+			for (buffer = 0; buffer < KNC_SPI_BUFFERS; ++buffer) {
+				for (resp = 0; resp < MAX_SPI_RESPONSES; ++resp) {
+					if (knc->spi_buffer[buffer].response_info[resp].core < pcore_to)
+						continue;
+					if (knc->spi_buffer[buffer].response_info[resp].core < pcore_from) {
+						knc->spi_buffer[buffer].response_info[resp].core = NULL;
+						continue;
+					}
+					knc->spi_buffer[buffer].response_info[resp].core -= deleted_cores;
+				}
 			}
 		}
 
@@ -644,6 +665,8 @@ static void knc_process_responses(struct thr_info *thr)
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			struct knc_core_state *core = response_info->core;
+			if (NULL == core) /* core was deleted, e.g. by API call */
+				continue;
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
 			/* Invert KNC_ACCEPTED to simplify logics below */
 			if (response_info->type == KNC_SETWORK && !KNC_IS_ERROR(status))

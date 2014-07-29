@@ -380,19 +380,6 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 		goto out_unlock;
 	}
 
-	if (enable) {
-		/* Send GETINFO to a die to detect if it is usable */
-		if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
-			if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
-				ret = ENODEV;
-				goto out_unlock;
-			}
-		} else {
-			ret = ENODEV;
-			goto out_unlock;
-		}
-	}
-
 	for (die = 0; die < knc->dies; ++die) {
 		if (knc->die[die].channel != asic_id || knc->die[die].die != die_id)
 			continue;
@@ -427,11 +414,24 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 			}
 		}
 
+		/* die was found */ 
 		ret = 0;
 		goto out_unlock;
 	}
 
+	/* die was not found */
 	if (enable) {
+		/* Send GETINFO to a die to detect if it is usable */
+		if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
+			if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
+				ret = ENODEV;
+				goto out_unlock;
+			}
+		} else {
+			ret = ENODEV;
+			goto out_unlock;
+		}
+
 		knc = realloc(knc, sizeof(*knc) + (knc->cores + die_info.cores) * sizeof(struct knc_core_state));
 		memset(&(knc->core[knc->cores]), 0, die_info.cores * sizeof(struct knc_core_state));
 		int next_die = knc->dies;

@@ -147,8 +147,7 @@ struct knc_state {
 	/* lock to protect resources between different threads */
 	pthread_mutex_t state_lock;
 
-	/* Do not add anything below here!! core[] must be last */
-	struct knc_core_state core[];
+	struct knc_core_state core[KNC_MAX_ASICS*KNC_DIES_PER_ASIC*KNC_MAX_CORES_PER_DIE];
 };
 
 int opt_knc_device_idx = 0;
@@ -304,7 +303,9 @@ static bool knc_detect_one(void *ctx)
 	applog(LOG_ERR, "Found a KnC miner with %d cores", cores);
 
 	cgpu = calloc(1, sizeof(*cgpu));
-	knc = calloc(1, sizeof(*knc) + cores * sizeof(struct knc_core_state));
+	knc = calloc(1, sizeof(*knc));
+	memset(knc, 0, sizeof(*knc));
+
 	if (!cgpu || !knc) {
 		applog(LOG_ERR, "KnC miner detected, but failed to allocate memory");
 		return false;
@@ -432,7 +433,6 @@ int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable
 			goto out_unlock;
 		}
 
-		knc = realloc(knc, sizeof(*knc) + (knc->cores + die_info.cores) * sizeof(struct knc_core_state));
 		memset(&(knc->core[knc->cores]), 0, die_info.cores * sizeof(struct knc_core_state));
 		int next_die = knc->dies;
 

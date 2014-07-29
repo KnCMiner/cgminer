@@ -304,7 +304,6 @@ static bool knc_detect_one(void *ctx)
 
 	cgpu = calloc(1, sizeof(*cgpu));
 	knc = calloc(1, sizeof(*knc));
-	memset(knc, 0, sizeof(*knc));
 
 	if (!cgpu || !knc) {
 		applog(LOG_ERR, "KnC miner detected, but failed to allocate memory");

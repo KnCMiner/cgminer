@@ -35,8 +35,8 @@
 	defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || \
 	defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || \
 	defined(USE_MINION) || defined(USE_COINTERRA) || defined(USE_BITMINE_A1) || \
-	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SPONDOOLIES) || \
-	defined(USE_ICARUS)
+	defined(USE_ANT_S1) || defined(USE_ANT_S2) || defined(USE_SP10) || defined(USE_SP30) || \
+	defined(USE_ICARUS) || defined(USE_HASHRATIO)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -187,6 +187,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_HASHFAST
 			"HFA "
 #endif
+#ifdef USE_HASHRATIO
+			"HRO "
+#endif
 #ifdef USE_BITMINE_A1
 			"BA1 "
 #endif
@@ -205,9 +208,13 @@ static const char *DEVICECODE = ""
 #ifdef USE_COINTERRA
 			"CTA "
 #endif
-#ifdef USE_SPONDOOLIES
+#ifdef USE_SP10
 			"SPN "
 #endif
+#ifdef USE_SP30
+      "S30 "
+#endif
+
 
 			"";
 
@@ -5079,13 +5086,7 @@ void api(int api_thr_id)
 
 					param = NULL;
 
-#if JANSSON_MAJOR_VERSION > 2 || (JANSSON_MAJOR_VERSION == 2 && JANSSON_MINOR_VERSION > 0)
 					json_config = json_loadb(buf, n, 0, &json_err);
-#elif JANSSON_MAJOR_VERSION > 1
-					json_config = json_loads(buf, 0, &json_err);
-#else
-					json_config = json_loads(buf, &json_err);
-#endif
 
 					if (!json_is_object(json_config)) {
 						message(io_data, MSG_INVJSON, 0, NULL, isjson);

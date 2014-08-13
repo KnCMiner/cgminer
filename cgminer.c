@@ -76,8 +76,12 @@ char *curly = ":D";
 #include "driver-bflsc.h"
 #endif
 
-#ifdef USE_SPONDOOLIES
-#include "driver-spondoolies.h"
+#ifdef USE_SP10
+#include "driver-spondoolies-sp10.h"
+#endif
+
+#ifdef USE_SP30
+#include "driver-spondoolies-sp30.h"
 #endif
 
 
@@ -222,6 +226,9 @@ static char *opt_set_avalon2_freq;
 static char *opt_set_avalon2_fan;
 static char *opt_set_avalon2_voltage;
 #endif
+#ifdef USE_HASHRATIO
+#include "driver-hashratio.h"
+#endif
 #ifdef USE_KLONDIKE
 char *opt_klondike_options = NULL;
 #endif
@@ -250,7 +257,14 @@ int opt_minion_chipreport;
 char *opt_minion_cores;
 char *opt_minion_freq;
 bool opt_minion_idlecount;
+int opt_minion_ledcount;
+int opt_minion_ledlimit = 98;
+bool opt_minion_noautofreq;
 bool opt_minion_overheat;
+int opt_minion_spidelay;
+char *opt_minion_spireset;
+int opt_minion_spisleep = 200;
+int opt_minion_spiusec;
 char *opt_minion_temp;
 #endif
 
@@ -1123,15 +1137,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--avalon2-freq",
 		     set_avalon2_freq, NULL, &opt_set_avalon2_freq,
 		     "Set frequency range for Avalon2, single value or range"),
-	OPT_WITH_CBARG("--avalon2-fan",
-		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
-		     "Set Avalon2 target fan speed"),
 	OPT_WITH_CBARG("--avalon2-voltage",
 		     set_avalon2_voltage, NULL, &opt_set_avalon2_voltage,
 		     "Set Avalon2 core voltage, in millivolts"),
+	OPT_WITH_CBARG("--avalon2-fan",
+		     set_avalon2_fan, NULL, &opt_set_avalon2_fan,
+		     "Set Avalon2 target fan speed"),
 	OPT_WITH_ARG("--avalon2-cutoff",
 		     set_int_0_to_100, opt_show_intval, &opt_avalon2_overheat,
 		     "Set Avalon2 overheat cut off temperature"),
+	OPT_WITHOUT_ARG("--avalon2-fixed-speed",
+		     set_avalon2_fixed_speed, &opt_avalon2_fan_fixed,
+		     "Set Avalon2 fan to fixed speed"),
 #endif
 #ifdef USE_BAB
 	OPT_WITH_ARG("--bab-options",
@@ -1309,6 +1326,11 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_200, opt_show_intval, &opt_hfa_target,
 		     "Set the hashfast target temperature (0 to disable)"),
 #endif
+#ifdef USE_HASHRATIO
+	OPT_WITH_CBARG("--hro-freq",
+		       set_hashratio_freq, opt_show_intval, &opt_hashratio_freq,
+		       "Set the hashratio clock frequency"),
+#endif
 	OPT_WITH_ARG("--hotplug",
 		     set_int_0_to_9999, NULL, &hotplug_time,
 #ifdef USE_USBUTILS
@@ -1348,18 +1370,39 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--minion-chipreport",
 		     set_int_0_to_100, opt_show_intval, &opt_minion_chipreport,
 		     "Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)"),
-	OPT_WITH_ARG("--minion-freq",
-		     opt_set_charp, NULL, &opt_minion_freq,
-		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1000)"),
 	OPT_WITH_ARG("--minion-cores",
 		     opt_set_charp, NULL, &opt_minion_cores,
 		     opt_hidden),
+	OPT_WITH_ARG("--minion-freq",
+		     opt_set_charp, NULL, &opt_minion_freq,
+		     "Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)"),
 	OPT_WITHOUT_ARG("--minion-idlecount",
 		     opt_set_bool, &opt_minion_idlecount,
 		     "Report when IdleCount is >0 or changes"),
+	OPT_WITH_ARG("--minion-ledcount",
+		     set_int_0_to_100, opt_show_intval, &opt_minion_ledcount,
+		     "Turn off led when more than this many chips below the ledlimit (default: 0)"),
+	OPT_WITH_ARG("--minion-ledlimit",
+		     set_int_0_to_200, opt_show_intval, &opt_minion_ledlimit,
+		     "Turn off led when chips GHs are below this (default: 90)"),
+	OPT_WITHOUT_ARG("--minion-noautofreq",
+		     opt_set_bool, &opt_minion_noautofreq,
+		     "Disable automatic frequency adjustment"),
 	OPT_WITHOUT_ARG("--minion-overheat",
 		     opt_set_bool, &opt_minion_overheat,
 		     "Enable directly halting any chip when the status exceeds 100C"),
+	OPT_WITH_ARG("--minion-spidelay",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_spidelay,
+		     "Add a delay in microseconds after each SPI I/O"),
+	OPT_WITH_ARG("--minion-spireset",
+		     opt_set_charp, NULL, &opt_minion_spireset,
+		     "SPI regular reset: iNNN for I/O count or sNNN for seconds - 0 means none"),
+	OPT_WITH_ARG("--minion-spisleep",
+		     set_int_0_to_9999, opt_show_intval, &opt_minion_spisleep,
+		     "Sleep time in milliseconds when doing an SPI reset"),
+	OPT_WITH_ARG("--minion-spiusec",
+		     set_int_0_to_9999, NULL, &opt_minion_spiusec,
+		     opt_hidden),
 	OPT_WITH_ARG("--minion-temp",
 		     opt_set_charp, NULL, &opt_minion_temp,
 		     "Set minion chip temperature threshold, single value or comma list, range 120-160 (default: 135C)"),
@@ -1509,6 +1552,7 @@ static char *parse_config(json_t *config, bool fileconf)
 {
 	static char err_buf[200];
 	struct opt_table *opt;
+	const char *str;
 	json_t *val;
 
 	if (fileconf && !fileconf_load)
@@ -1537,16 +1581,24 @@ static char *parse_config(json_t *config, bool fileconf)
 				continue;
 
 			if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) && json_is_string(val)) {
-				err = opt->cb_arg(json_string_value(val),
-						  opt->u.arg);
+				str = json_string_value(val);
+				err = opt->cb_arg(str, opt->u.arg);
+				if (opt->type == OPT_PROCESSARG)
+					opt_set_charp(str, opt->u.arg);
 			} else if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) && json_is_array(val)) {
-				int n, size = json_array_size(val);
+				json_t *arr_val;
+				size_t index;
 
-				for (n = 0; n < size && !err; n++) {
-					if (json_is_string(json_array_get(val, n)))
-						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
-					else if (json_is_object(json_array_get(val, n)))
-						err = parse_config(json_array_get(val, n), false);
+				json_array_foreach(val, index, arr_val) {
+					if (json_is_string(arr_val)) {
+						str = json_string_value(arr_val);
+						err = opt->cb_arg(str, opt->u.arg);
+						if (opt->type == OPT_PROCESSARG)
+							opt_set_charp(str, opt->u.arg);
+					} else if (json_is_object(arr_val))
+						err = parse_config(arr_val, false);
+					if (err)
+						break;
 				}
 			} else if ((opt->type & OPT_NOARG) && json_is_true(val))
 				err = opt->cb(opt->u.arg);
@@ -1618,11 +1670,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	if (++include_count > JSON_MAX_DEPTH)
 		return JSON_MAX_DEPTH_ERR;
 
-#if JANSSON_MAJOR_VERSION > 1
 	config = json_load_file(arg, 0, &err);
-#else
-	config = json_load_file(arg, &err);
-#endif
 	if (!json_is_object(config)) {
 		siz = JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text);
 		json_error = malloc(siz);
@@ -1719,9 +1767,13 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_BITMINE_A1
 		"Bitmine.A1 "
 #endif
-#ifdef USE_SPONDOOLIES
+#ifdef USE_SP10
 		"spondoolies "
 #endif
+#ifdef USE_SP30
+        "sp30 "
+#endif
+
 		"mining support.\n"
 		, packagename);
 	printf("%s", opt_usage(opt_argv0, extra));
@@ -2111,7 +2163,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 	memset(hashbin, 0, 32);
 	binleft = binlen / 32;
 	if (pool->transactions) {
-		int len = 1, ofs = 0;
+		int len = 0, ofs = 0;
 		const char *txn;
 
 		for (i = 0; i < pool->transactions; i++) {
@@ -4976,6 +5028,7 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 				continue;
@@ -6795,20 +6848,33 @@ void set_target(unsigned char *dest_target, double diff)
 	memcpy(dest_target, target, 32);
 }
 
-#ifdef USE_AVALON2
-void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce)
+#if defined (USE_AVALON2) || defined (USE_HASHRATIO)
+bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
+			 uint32_t nonce2, uint32_t nonce)
 {
+	const int thr_id = thr->id;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct device_drv *drv = cgpu->drv;
-
-	struct pool *pool = pools[pool_no];
 	struct work *work = make_work();
+	bool ret;
 
+	cg_wlock(&pool->data_lock);
 	pool->nonce2 = nonce2;
-	gen_stratum_work(pool, work);
+	cg_wunlock(&pool->data_lock);
 
-	submit_nonce(thr, work, nonce);
+	gen_stratum_work(pool, work);
+	work->pool = real_pool;
+
+	work->thr_id = thr_id;
+	work->work_block = work_block;
+	work->pool->works++;
+
+	work->mined = true;
+	work->device_diff = MIN(drv->max_diff, work->work_difficulty);
+
+	ret = submit_nonce(thr, work, nonce);
 	free_work(work);
+	return ret;
 }
 #endif
 
@@ -7753,17 +7819,13 @@ void hash_driver_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-#ifndef USE_AVALON2
 		mythr->work_update = false;
-#endif
 
 		hashes = drv->scanwork(mythr);
 
-#ifndef USE_AVALON2
 		/* Reset the bool here in case the driver looks for it
 		 * synchronously in the scanwork loop. */
 		mythr->work_restart = false;
-#endif
 
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
@@ -8223,12 +8285,10 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			if (pool->enabled == POOL_DISABLED)
 				continue;
 
-			/* Don't start testing any pools if the test threads
-			 * from startup are still doing their first attempt. */
-			if (unlikely(pool->testing)) {
-				pthread_join(pool->test_thread, NULL);
-				pool->testing = false;
-			}
+			/* Don't start testing a pool if its test thread
+			 * from startup is still doing its first attempt. */
+			if (unlikely(pool->testing))
+				continue;
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
@@ -8604,6 +8664,8 @@ static void *test_pool_thread(void *arg)
 {
 	struct pool *pool = (struct pool *)arg;
 
+	if (!pool->blocking)
+		pthread_detach(pthread_self());
 retry:
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
@@ -8630,6 +8692,8 @@ retry:
 		goto retry;
 	}
 
+	pool->testing = false;
+
 	return NULL;
 }
 
@@ -8653,12 +8717,12 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 
 	pool->testing = true;
 	pool->idle = true;
+	pool->blocking = !live;
 	enable_pool(pool);
 
 	pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
 	if (!live) {
 		pthread_join(pool->test_thread, NULL);
-		pool->testing = false;
 		return pools_active;
 	}
 	return true;
@@ -9336,6 +9400,10 @@ int main(int argc, char *argv[])
 			strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
 		pool->rpc_pass = pool->rpc_url;
+		pool->rpc_userpass = pool->rpc_url;
+		pool->sockaddr_url = pool->rpc_url;
+		strncpy(pool->diff, "?", sizeof(pool->diff)-1);
+		pool->diff[sizeof(pool->diff)-1] = '\0';
 		enable_pool(pool);
 		pool->idle = false;
 		successful_connect = true;

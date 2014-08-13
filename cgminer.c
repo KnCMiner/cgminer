@@ -1559,7 +1559,7 @@ static char *parse_config(json_t *config, bool fileconf)
 		fileconf_load = 1;
 
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
-		char *p, *name;
+		char *p, *name, *_save;
 
 		/* We don't handle subtables. */
 		assert(!(opt->type & OPT_SUBTABLE));
@@ -1569,7 +1569,7 @@ static char *parse_config(json_t *config, bool fileconf)
 
 		/* Pull apart the option name(s). */
 		name = strdup(opt->names);
-		for (p = strtok(name, "|"); p; p = strtok(NULL, "|")) {
+		for (p = strtok_r(name, "|", &_save); p; p = strtok_r(NULL, "|", &_save)) {
 			char *err = NULL;
 
 			/* Ignore short options. */

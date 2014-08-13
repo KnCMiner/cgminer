@@ -4131,7 +4131,7 @@ static void knc_configure_die(struct io_data *io_data, __maybe_unused SOCKETTYPE
 			(*scolon++) = 0;
 
 			die_id = atoi(semi);
-			if (die_id < 0 || die_id >= KNC_DIES_PER_ASIC) {
+			if (die_id < 0 || die_id >= KNC_MAX_DIES_PER_ASIC) {
 				message(io_data, MSG_INVDIE, die_id, NULL, isjson);
 			}
 			param = scolon;

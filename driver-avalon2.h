@@ -28,7 +28,8 @@
 #define AVA2_DEFAULT_FAN_MIN	10
 #define AVA2_DEFAULT_FAN_MAX	85
 
-#define AVALON2_TEMP_OVERHEAT	88
+#define AVALON2_TEMP_OVERHEAT	98
+#define AVALON2_DEFAULT_POLLING_DELAY	20 /* ms */
 
 #define AVA2_DEFAULT_VOLTAGE_MIN	6000
 #define AVA2_DEFAULT_VOLTAGE_MAX	11000
@@ -133,6 +134,8 @@ struct avalon2_info {
 	int matching_work[AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS];
 
 	int led_red[AVA2_DEFAULT_MODULARS];
+
+	bool failing;
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
@@ -155,5 +158,6 @@ extern char *set_avalon2_voltage(char *arg);
 extern char *set_avalon2_fixed_speed(enum avalon2_fan_fixed *f);
 extern enum avalon2_fan_fixed opt_avalon2_fan_fixed;
 extern int opt_avalon2_overheat;
+extern int opt_avalon2_polling_delay;
 #endif /* USE_AVALON2 */
 #endif	/* _AVALON2_H_ */

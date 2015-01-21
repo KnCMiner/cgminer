@@ -1,13 +1,15 @@
 SUPPORTED DEVICES
 
 Currently supported devices include:
-- Antminer U1/U2/U2+ USB
+- Antminer U1/U2/U2+/U3 USB
 - Antminer S1
 - ASICMINER block erupters
+- ASICMINER Tube/Prisma
 - Avalon (including BitBurner and Klondike)
 - Avalon2/3
+- Avalon4
 - BFx2 USB
-- Butterfly Labs SC range
+- Butterfly Labs SC 65/28nm range
 - BF1 (bitfury) USB (red and blue)
 - BlackArrow Bitfury
 - BlackArrow Minion
@@ -20,7 +22,7 @@ Currently supported devices include:
 - Nanofury USB
 - Other bitfury USB devices
 - Onestring miner USB
-- Rockminer R-Box
+- Rockminer R-Box/RK-Box/T1/New R-Box
 - Spondoolies SP10, SP30
 
 
@@ -34,6 +36,7 @@ BAJ: BFL ASIC Jalapeño
 BAL: BFL ASIC Little Single
 BAS: BFL ASIC Single
 BAM: BFL ASIC Minirig
+BMA: BFL Monarch
 
 BFL devices need the --enable-bflsc option when compiling cgminer yourself.
 
@@ -44,6 +47,10 @@ Avalon devices need the --enable-avalon option when compiling cgminer.
 Avalon2/3 will come up as AV2.
 
 Avalon2/3 devices need the --enable-avalon2 option when compiling cgminer.
+
+Avalon4 will come up as AV4.
+
+Avalon4 devies need the --enable-avalon4 option when compiling cgminer.
 
 Klondike will come up as KLN.
 
@@ -56,6 +63,10 @@ Also note that the AMU is managed by the Icarus driver which is detailed
 in the FPGA-README. Configuring them uses the same mechanism as outlined
 below for getting started with USB ASICs.
 
+ASICMINER BlockErupter Tube/Prisma will come up as BET.
+
+ASICMINER Tube/Prisma devices need the --enable-blockerupter option when
+compiling cgminer.
 
 BlackArrow Bitfury devices
 
@@ -112,14 +123,17 @@ HASHRATIO devices
 Hashratio devices need the --enable-hashratio option when compiling cgminer.
 
 
-ANTMINER U1/U2+ devices
+ANTMINER U1/U2+/U3 devices
 
 Antminer devices need the --enable-icarus option when compiling cgminer.
 
-Currently the U1 USB sticks are supported and come up as ANU devices. They
-are also set up as per the USB ASICs below. They need no options to work well
-but will accept all the icarus options.
+Currently the U1/2/3 USB sticks are supported and come up as the following
+devices:
 
+ANU: Antminer U1/U2/U2+
+AU3: Antminer U3
+
+They are also set up as per the USB ASICs below.
 
 ANTMINER S1 devices
 
@@ -135,9 +149,13 @@ BITMINE A1 devices
 Bitmine A1 devices need the --enable-bitmine_A1 compile option set.
 
 
-Rockminer R-Box
+Rockminer R*Box
 
-Rockminer R-Box devices need the --enable-icarus compile option set.
+Rockminer R*Box devices need the --enable-icarus compile option set.
+
+They appear with the following names:
+LIN: R-Box
+LIR: New R-Box
 
 ---
 GETTING STARTED WITH USB ASICS
@@ -222,7 +240,9 @@ i.e.:
 
 ASIC SPECIFIC COMMANDS
 
---anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
+--anu-freq <arg>    Set AntminerU1/2 frequency in MHz, range 125-500 (default: 250.0)
+--au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
@@ -234,7 +254,18 @@ ASIC SPECIFIC COMMANDS
 --avalon2-fan       Set Avalon2 target fan speed
 --avalon2-cutoff <arg> Set Avalon2 overheat cut off temperature (default: 88)
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
+--avalon4-automatic-voltage Automatic adjust voltage base on module DH
+--avalon4-voltage   Set Avalon4 core voltage, in millivolts, step: 125
+--avalon4-freq      Set frequency for Avalon4, 1 to 3 values, example: 445:385:370
+--avalon4-fan       Set Avalon4 target fan speed range
+--avalon4-temp <arg> Set Avalon4 target temperature (default: 42)
+--avalon4-cutoff <arg> Set Avalon4 overheat cut off temperature (default: 65)
+--avalon4-polling-delay <arg> Set Avalon4 polling delay value (ms) (default: 20)
+--avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
+--avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
+--avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
 --bab-options <arg> Set BaB options max:def:min:up:down:hz:delay:trf
+--bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
@@ -254,13 +285,15 @@ ASIC SPECIFIC COMMANDS
 --hfa-fan <arg>     Set fanspeed percentage for hashfast, single value or range (default: 10-85)
 --hfa-name <arg>    Set a unique name for a single hashfast device specified with --usb or the first device found
 --hfa-noshed        Disable hashfast dynamic core disabling feature
---hfa-options <arg> Set hashfast options name:clock (comma separated)
+--hfa-options <arg> Set hashfast options name:clock or name:clock@voltage (comma separated)
 --hfa-temp-overheat <arg> Set the hashfast overheat throttling temperature (default: 95)
 --hfa-temp-target <arg> Set the hashfast target temperature (0 to disable) (default: 88)
 --hro-freq          Set the hashratio clock frequency (default: 280)
 --klondike-options <arg> Set klondike options clock:temptarget
 --minion-chipreport <arg> Seconds to report chip 5min hashrate, range 0-100 (default: 0=disabled)
 --minion-freq <arg> Set minion chip frequencies in MHz, single value or comma list, range 100-1400 (default: 1200)
+--minion-freqchange Millisecond total time to do frequency changes (default: 1000)
+--minion-freqpercent Percentage to use when starting up a chip (default: 70%)
 --minion-idlecount  Report when IdleCount is >0 or changes
 --minion-ledcount   Turn off led when more than this many chips below the ledlimit (default: 0)
 --minion-ledlimit   Turn off led when chips GHs are below this (default: 90)
@@ -285,14 +318,16 @@ ANTMINER S1 DEVICES
 --bitmain-options   Set bitmain options baud:miners:asic:timeout:freq
 --bitmain-temp      Set bitmain target temperature
 
-The Antminer S1 device comes with it's own operating system and a preinstalled
+The Antminer S1 device comes with its own operating system and a preinstalled
 version of cgminer as part of the flash firmware. No configuration should be
 necessary.
 
 
-ANTMINER U1 DEVICES
+ANTMINER U1/2/3 DEVICES
 
 --anu-freq <arg>    Set AntminerU1 frequency in MHz, range 150-500 (default: 200)
+--au3-freq <arg>    Set AntminerU3 frequency in MHz, range 100-250 (default: 225.0)
+--au3-volt <arg>    Set AntminerU3 voltage in mv, range 725-850, 0 to not set (default: 750)
 
 By default, Antminer U1 devices run at a clockspeed of 200. This command allows
 you to specify a chosen frequency to attempt to run all ANU devices at. Cgminer
@@ -302,6 +337,16 @@ ONLY FROM VALID HASHES so if you increase the frequency but your hashrate does
 not increase or it decreases and hardware errors start showing up, you have
 overclocked it too much. In the worst case scenario it will fail to start at too
 high a speed. Most will run happily up to 250.
+
+ASICMINER BlockErupter Tube/Prisma DEVICES
+
+--bet-clk <arg>     Set clockspeed of ASICMINER Tube/Prisma to (arg+1)*10MHz (default: 23)
+
+Default clockspeed for Tube/Prisma is 240MHz. This command allows to set clockspeed
+of on board BE200 chips in range from 200MHz to 320MHz. For Tube devices, you can
+try overclocking to 270MHz or even higher, but NOT recommended for Prisma devices.
+If you notice hash rate drops or board fails to start, restart cgminer with lower
+clockspeed.
 
 
 AVALON AND BITBURNER DEVICES
@@ -489,6 +534,20 @@ Avalon2 Devices
 --avalon2-fixed-speed Set Avalon2 fan to fixed speed
 
 
+Avalon4 Devices
+
+--avalon4-automatic-voltage Automatic adjust voltage base on module DH
+--avalon4-voltage   Set Avalon4 core voltage, in millivolts, step: 125
+--avalon4-freq      Set frequency for Avalon4, 1 to 3 values, example: 445:385:370
+--avalon4-fan       Set Avalon4 target fan speed range
+--avalon4-temp <arg> Set Avalon4 target temperature (default: 42)
+--avalon4-cutoff <arg> Set Avalon4 overheat cut off temperature (default: 65)
+--avalon4-polling-delay <arg> Set Avalon4 polling delay value (ms) (default: 20)
+--avalon4-ntime-offset <arg> Set Avalon4 MM ntime rolling max offset (default: 4)
+--avalon4-aucspeed <arg> Set Avalon4 AUC IIC bus speed (default: 400000)
+--avalon4-aucxdelay <arg> Set Avalon4 AUC IIC xfer read delay, 4800 ~= 1ms (default: 9600)
+
+
 BFLSC Devices
 
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
@@ -649,20 +708,22 @@ If you wished to name the second device Slug you would add the commands:
 Newer firmwares on hashfast devices dynamically disable cores that generate
 invalid data. This command will disable this feature where possible.
 
---hfa-options <arg> Set hashfast options name:clock (comma separated)
+--hfa-options <arg> Set hashfast options name:clock or clock@voltage (comma separated)
 
 This command allows you to set options for each discrete hashfast device by
 its name (if the firmware has naming support, i.e. version 0.3+). Currently
-this takes only one option, the clock speed, although future options may be
-added.
+this takes as option the clock speed alone or clock speed and voltage, 
+although future options may be added.
 e.g.:
---hfa-options "rabbit:650,turtle:550"
+--hfa-options "rabbit:650,turtle:550@800"
 
-Would set a device named rabbit to clock speed 650 and the one named turtle to
-550. Starting the device at a speed where it is most stable will give more
-reliable hashrates long term and prevent it interacting with other devices,
-rather than depending on the clockdown feature in cgminer.
+Would set a device named rabbit to clock speed 650 MHz using default voltage
+and the one named turtle to 550 MHz using a voltage of 800 mv. Starting the
+device at a speed where it is most stable will give more reliable hashrates
+long term and prevent it interacting with other devices, rather than depending
+on the clockdown feature in cgminer.
 
+Note: Setting voltage cause a board reset and hotplug event on cgminer startup.
 
 Other undocumented hashfast command line options are for development purposes
 only at this stage and serve no useful purpose to end users.

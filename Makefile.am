@@ -138,6 +138,10 @@ if HAS_AVALON2
 cgminer_SOURCES += driver-avalon2.c driver-avalon2.h
 endif
 
+if HAS_AVALON4
+cgminer_SOURCES += driver-avalon4.c driver-avalon4.h
+endif
+
 if HAS_MINION
 cgminer_SOURCES += driver-minion.c
 endif
@@ -154,4 +158,8 @@ if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = $(top_srcdir)/bitstreams/README
+endif
+
+if HAS_BLOCKERUPTER
+cgminer_SOURCES += driver-blockerupter.c driver-blockerupter.h
 endif

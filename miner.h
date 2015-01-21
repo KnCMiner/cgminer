@@ -233,8 +233,10 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(ants2) \
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(avalon2) \
+	DRIVER_ADD_COMMAND(avalon4) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(blockerupter) \
 	DRIVER_ADD_COMMAND(cointerra) \
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(hashratio) \
@@ -348,6 +350,9 @@ struct device_drv {
 
 	/* Highest target diff the device supports */
 	double max_diff;
+
+	/* Lowest diff the controller can safely run at */
+	double min_diff;
 };
 
 extern struct device_drv *copy_drv(struct device_drv*);
@@ -431,6 +436,7 @@ struct cgpu_info {
 	struct cg_usb_device *usbdev;
 	struct cg_usb_info usbinfo;
 	bool blacklisted;
+	bool nozlp; // Device prefers no zero length packet
 #endif
 #if defined(USE_AVALON) || defined(USE_AVALON2)
 	struct work **works;
@@ -490,6 +496,7 @@ struct cgpu_info {
 	time_t last_share_pool_time;
 	double last_share_diff;
 	time_t last_device_valid_work;
+	uint32_t last_nonce;
 
 	time_t device_last_well;
 	time_t device_last_not_well;
@@ -778,7 +785,7 @@ static inline void _mutex_unlock_noyield(pthread_mutex_t *lock, const char *file
 static inline void _mutex_unlock(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	_mutex_unlock_noyield(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline int _mutex_trylock(pthread_mutex_t *lock, __maybe_unused const char *file, __maybe_unused const char *func, __maybe_unused const int line)
@@ -833,13 +840,13 @@ static inline void _wr_unlock_noyield(pthread_rwlock_t *lock, const char *file, 
 static inline void _rd_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	_rw_unlock(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline void _wr_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	_rw_unlock(lock, file, func, line);
-	sched_yield();
+	selective_yield();
 }
 
 static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const char *func, const int line)
@@ -956,6 +963,7 @@ static inline void _cg_wunlock(cglock_t *lock, const char *file, const char *fun
 
 struct pool;
 
+#define API_LISTEN_ADDR "0.0.0.0"
 #define API_MCAST_CODE "FTW"
 #define API_MCAST_ADDR "224.0.0.75"
 
@@ -964,6 +972,7 @@ extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
+extern int opt_suggest_diff;
 extern char *cgminer_path;
 extern bool opt_fail_only;
 extern bool opt_lowmem;
@@ -979,6 +988,7 @@ extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
+extern char *opt_api_host;
 extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
@@ -988,6 +998,8 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern float opt_anu_freq;
+extern float opt_au3_freq;
+extern int opt_au3_volt;
 extern float opt_rock_freq;
 #endif
 extern bool opt_worktime;
@@ -1024,7 +1036,10 @@ extern bool opt_bitmain_tempoverctrl;
 #ifdef USE_MINION
 extern int opt_minion_chipreport;
 extern char *opt_minion_cores;
+extern bool opt_minion_extra;
 extern char *opt_minion_freq;
+extern int opt_minion_freqchange;
+extern int opt_minion_freqpercent;
 extern bool opt_minion_idlecount;
 extern int opt_minion_ledcount;
 extern int opt_minion_ledlimit;
@@ -1093,9 +1108,9 @@ extern pthread_cond_t restart_cond;
 extern void clear_stratum_shares(struct pool *pool);
 extern void clear_pool_work(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff);
-#if defined (USE_AVALON2) || defined (USE_HASHRATIO)
+#if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
-			 uint32_t nonce2, uint32_t nonce);
+			 uint32_t nonce2, uint32_t nonce, uint32_t ntime);
 #endif
 extern int restart_wait(struct thr_info *thr, unsigned int mstime);
 
@@ -1444,6 +1459,7 @@ extern int share_work_tdiff(struct cgpu_info *cgpu);
 extern struct work *get_work(struct thr_info *thr, const int thr_id);
 extern void __add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queued(struct cgpu_info *cgpu);
+extern struct work *__get_queued(struct cgpu_info *cgpu);
 extern void add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
@@ -1464,11 +1480,8 @@ extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
 extern void switch_pools(struct pool *selected);
-extern void _discard_work(struct work *work);
-#define discard_work(WORK) do { \
-	_discard_work(WORK); \
-	WORK = NULL; \
-} while (0)
+extern void _discard_work(struct work **workptr, const char *file, const char *func, const int line);
+#define discard_work(WORK) _discard_work(&(WORK), __FILE__, __func__, __LINE__)
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
 extern void zero_bestshare(void);
@@ -1492,11 +1505,8 @@ extern void app_restart(void);
 extern void roll_work(struct work *work);
 extern struct work *make_clone(struct work *work);
 extern void clean_work(struct work *work);
-extern void _free_work(struct work *work);
-#define free_work(WORK) do { \
-	_free_work(WORK); \
-	WORK = NULL; \
-} while (0)
+extern void _free_work(struct work **workptr, const char *file, const char *func, const int line);
+#define free_work(WORK) _free_work(&(WORK), __FILE__, __func__, __LINE__)
 extern void set_work_ntime(struct work *work, int ntime);
 extern struct work *copy_work_noffset(struct work *base_work, int noffset);
 #define copy_work(work_in) copy_work_noffset(work_in, 0)

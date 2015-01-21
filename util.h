@@ -14,6 +14,7 @@
 	#define INVSOCK -1
 	#define INVINETADDR -1
 	#define CLOSESOCKET close
+	#define INET_PTON inet_pton
 
 	#define SOCKERRMSG strerror(errno)
 	static inline bool sock_blocks(void)
@@ -37,6 +38,9 @@
 	#define INVSOCK INVALID_SOCKET
 	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
+
+	int Inet_Pton(int af, const char *src, void *dst);
+	#define INET_PTON Inet_Pton
 
 	extern char *WSAErrorMsg(void);
 	#define SOCKERRMSG WSAErrorMsg()
@@ -98,6 +102,8 @@ typedef LARGE_INTEGER cgtimer_t;
 typedef struct timespec cgtimer_t;
 #endif
 
+int no_yield(void);
+int (*selective_yield)(void);
 struct thr_info;
 struct pool;
 enum dev_reason;
@@ -120,6 +126,8 @@ void us_to_timeval(struct timeval *val, int64_t us);
 void us_to_timespec(struct timespec *spec, int64_t us);
 void ms_to_timespec(struct timespec *spec, int64_t ms);
 void timeraddspec(struct timespec *a, const struct timespec *b);
+char *Strcasestr(char *haystack, const char *needle);
+char *Strsep(char **stringp, const char *delim);
 void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
 void cgtimer_time(cgtimer_t *ts_start);

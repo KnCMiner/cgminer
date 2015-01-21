@@ -69,10 +69,12 @@ static cgtimer_t usb11_cgt;
 #define BITFORCE_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
+#define AVALON4_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
 #define COINTERRA_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
 #define HASHRATIO_TIMEOUT_MS 999
+#define BLOCKERUPTER_TIMEOUT_MS 999
 
 /* The safety timeout we use, cancelling async transfers on windows that fail
  * to timeout on their own. */
@@ -83,10 +85,12 @@ static cgtimer_t usb11_cgt;
 #define BITFORCE_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
+#define AVALON4_TIMEOUT_MS 50
 #define KLONDIKE_TIMEOUT_MS 200
 #define COINTERRA_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 500
 #define HASHRATIO_TIMEOUT_MS 200
+#define BLOCKERUPTER_TIMEOUT_MS 300
 #endif
 
 #define USB_EPS(_intx, _epinfosx) { \
@@ -109,14 +113,13 @@ static cgtimer_t usb11_cgt;
 static struct list_head ut_list;
 
 #ifdef USE_BFLSC
-// N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
-static struct usb_epinfo bas_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
+static struct usb_epinfo bflsc_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	512,	EPO(2), 0, 0 }
 };
 
-static struct usb_intinfo bas_ints[] = {
-	USB_EPS(0, bas_epinfos)
+static struct usb_intinfo bflsc_ints[] = {
+	USB_EPS(0, bflsc_epinfos)
 };
 #endif
 
@@ -178,6 +181,18 @@ static struct usb_epinfo bxm_epinfos[] = {
 
 static struct usb_intinfo bxm_ints[] = {
 	USB_EPS(0, bxm_epinfos)
+};
+#endif
+
+#ifdef USE_BLOCKERUPTER
+// BlockErupter Device
+static struct usb_epinfo bet_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo bet_ints[] = {
+	USB_EPS(0, bet_epinfos)
 };
 #endif
 
@@ -262,6 +277,17 @@ static struct usb_intinfo ava2_ints[] = {
 };
 #endif
 
+#ifdef USE_AVALON4
+static struct usb_epinfo ava4_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
+};
+
+static struct usb_intinfo ava4_ints[] = {
+	USB_EPS(1, ava4_epinfos)
+};
+#endif
+
 #ifdef USE_KLONDIKE
 static struct usb_epinfo kln_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
@@ -295,6 +321,20 @@ static struct usb_epinfo ica_epinfos[] = {
 
 static struct usb_intinfo ica_ints[] = {
 	USB_EPS(0, ica_epinfos)
+};
+
+static struct usb_epinfo ica1_epinfos0[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	16,	EPI(0x82), 0, 0 }
+};
+
+static struct usb_epinfo ica1_epinfos1[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(0x81), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(0x01), 0, 0 }
+};
+
+static struct usb_intinfo ica1_ints[] = {
+	USB_EPS(1, ica1_epinfos1),
+	USB_EPS(0, ica1_epinfos0)
 };
 
 static struct usb_epinfo amu_epinfos[] = {
@@ -401,12 +441,36 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_BAS,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
-		//.iManufacturer = "Butterfly Labs",
+		.iManufacturer = "Butterfly Labs",
 		.iProduct = "BitFORCE SHA256 SC",
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		INTINFO(bas_ints) },
+		INTINFO(bflsc_ints) },
+	{
+		.drv = DRIVER_bflsc,
+		.name = "BMA",
+		.ident = IDENT_BMA,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6014,
+		.iManufacturer = "BUTTERFLY LABS",
+		.iProduct = "BitFORCE SC-28nm",
+		.config = 1,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
+		INTINFO(bflsc_ints) },
+	{
+		.drv = DRIVER_bflsc,
+		.name = "BMA",
+		.ident = IDENT_BMA,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6014,
+		.iManufacturer = "BUTTERFLY LABS",
+		.iProduct = "BitFORCE SHA256",
+		.config = 1,
+		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
+		INTINFO(bflsc_ints) },
 #endif
 #ifdef USE_BITFORCE
 	{
@@ -485,6 +549,19 @@ static struct usb_find_devices find_dev[] = {
 		INTINFO(bxm_ints)
 	},
 #endif
+#ifdef USE_BLOCKERUPTER
+	{
+		.drv = DRIVER_blockerupter,
+		.name = "BET",
+		.ident = IDENT_BET,
+		.idVendor = 0x10c4,
+		.idProduct = 0xea60,
+		.config = 1,
+		.timeout = BLOCKERUPTER_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(bet_ints) },
+	
+#endif	
 #ifdef USE_DRILLBIT
 	{
 		.drv = DRIVER_drillbit,
@@ -560,6 +637,20 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_UNUSED,
 		INTINFO(ava2_ints) },
 #endif
+#ifdef USE_AVALON4
+	{
+		.drv = DRIVER_avalon4,
+		.name = "AV4",
+		.ident = IDENT_AV4,
+		.idVendor = 0x29f1,
+		.idProduct = 0x33f2,
+		.iManufacturer = "CANAAN",
+		.iProduct = "USB2IIC Converter",
+		.config = 1,
+		.timeout = AVALON4_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(ava4_ints) },
+#endif
 #ifdef USE_HASHFAST
 	{
 		.drv = DRIVER_hashfast,
@@ -619,6 +710,16 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(ica_ints) },
+ 	{
+ 		.drv = DRIVER_icarus,
+ 		.name = "ICA",
+ 		.ident = IDENT_AVA,
+ 		.idVendor = 0x1fc9,
+ 		.idProduct = 0x0083,
+ 		.config = 1,
+ 		.timeout = ICARUS_TIMEOUT_MS,
+ 		.latency = LATENCY_UNUSED,
+ 		INTINFO(ica1_ints) },
 	{
 		.drv = DRIVER_icarus,
 		.name = "AMU",
@@ -1931,6 +2032,7 @@ struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu)
 
 static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
 {
+	unsigned char man[STRBUFLEN+1], prod[STRBUFLEN+1];
 	struct cg_usb_device *cgusb = NULL;
 	struct libusb_config_descriptor *config = NULL;
 	const struct libusb_interface_descriptor *idesc;
@@ -1940,7 +2042,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	char devstr[STRBUFLEN+1];
 	int err, ifinfo, epinfo, alt, epnum, pstate;
 	int bad = USB_INIT_FAIL;
-	int cfg, claimed = 0;
+	int cfg, claimed = 0, i;
 
 	DEVWLOCK(cgpu, pstate);
 
@@ -2034,45 +2136,72 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	}
 #endif
 
+	err = libusb_get_string_descriptor_ascii(cgusb->handle,
+							cgusb->descriptor->iManufacturer,
+							man, STRBUFLEN);
+	if (err < 0) {
+		applog(LOG_DEBUG,
+			"USB init, failed to get iManufacturer, err %d %s",
+			err, devstr);
+		goto cldame;
+	}
 	if (found->iManufacturer) {
-		unsigned char man[STRBUFLEN+1];
-
-		err = libusb_get_string_descriptor_ascii(cgusb->handle,
-							 cgusb->descriptor->iManufacturer,
-							 man, STRBUFLEN);
-		if (err < 0) {
-			applog(LOG_DEBUG,
-				"USB init, failed to get iManufacturer, err %d %s",
-				err, devstr);
-			goto cldame;
-		}
-		if (strcmp((char *)man, found->iManufacturer)) {
+		if (strcasecmp((char *)man, found->iManufacturer)) {
 			applog(LOG_DEBUG, "USB init, iManufacturer mismatch %s",
 			       devstr);
 			applog(LOG_DEBUG, "Found %s vs %s", man, found->iManufacturer);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
 		}
+	} else {
+		for (i = 0; find_dev[i].drv != DRIVER_MAX; i++) {
+			const char *iManufacturer = find_dev[i].iManufacturer;
+			/* If other drivers has an iManufacturer set that match,
+			 * don't try to claim this device. */
+
+			if (!iManufacturer)
+				continue;
+			if (!strcasecmp((char *)man, iManufacturer)) {
+				applog(LOG_DEBUG, "USB init, alternative iManufacturer match %s",
+				       devstr);
+				applog(LOG_DEBUG, "Found %s", iManufacturer);
+				bad = USB_INIT_IGNORE;
+				goto cldame;
+			}
+		}
 	}
 
+	err = libusb_get_string_descriptor_ascii(cgusb->handle,
+							cgusb->descriptor->iProduct,
+							prod, STRBUFLEN);
+	if (err < 0) {
+		applog(LOG_DEBUG,
+			"USB init, failed to get iProduct, err %d %s",
+			err, devstr);
+		goto cldame;
+	}
 	if (found->iProduct) {
-		unsigned char prod[STRBUFLEN+1];
-
-		err = libusb_get_string_descriptor_ascii(cgusb->handle,
-							 cgusb->descriptor->iProduct,
-							 prod, STRBUFLEN);
-		if (err < 0) {
-			applog(LOG_DEBUG,
-				"USB init, failed to get iProduct, err %d %s",
-				err, devstr);
-			goto cldame;
-		}
-		if (strcmp((char *)prod, found->iProduct)) {
+		if (strcasecmp((char *)prod, found->iProduct)) {
 			applog(LOG_DEBUG, "USB init, iProduct mismatch %s",
 			       devstr);
 			applog(LOG_DEBUG, "Found %s vs %s", prod, found->iProduct);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
+		}
+	} else {
+		for (i = 0; find_dev[i].drv != DRIVER_MAX; i++) {
+			const char *iProduct = find_dev[i].iProduct;
+			/* Do same for iProduct as iManufacturer above */
+
+			if (!iProduct)
+				continue;
+			if (!strcasecmp((char *)prod, iProduct)) {
+				applog(LOG_DEBUG, "USB init, alternative iProduct match %s",
+				       devstr);
+				applog(LOG_DEBUG, "Found %s", iProduct);
+				bad = USB_INIT_IGNORE;
+				goto cldame;
+			}
 		}
 	}
 
@@ -2232,7 +2361,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 	// Allow a name change based on the idVendor+idProduct
 	// N.B. must be done before calling add_cgpu()
-	if (strcmp(cgpu->drv->name, found->name)) {
+	if (strcasecmp(cgpu->drv->name, found->name)) {
 		if (!cgpu->drv->copy)
 			cgpu->drv = copy_drv(cgpu->drv);
 		cgpu->drv->name = (char *)(found->name);
@@ -2881,6 +3010,12 @@ usb_perform_transfer(struct cgpu_info *cgpu, struct cg_usb_device *usbdev, int i
 	interrupt = usb_epinfo->att == LIBUSB_TRANSFER_TYPE_INTERRUPT;
 	endpoint = usb_epinfo->ep;
 
+	if (unlikely(!data)) {
+		applog(LOG_ERR, "USB error: usb_perform_transfer sent NULL data (%s,intinfo=%d,epinfo=%d,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d",
+		       cgpu->drv->name, intinfo, epinfo, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
+		err = LIBUSB_ERROR_IO;
+		goto out_fail;
+	}
 	/* Avoid any async transfers during shutdown to allow the polling
 	 * thread to be shut down after all existing transfers are complete */
 	if (opt_lowmem || cgpu->shutdown)
@@ -2894,7 +3029,7 @@ err_retry:
 		/* Older versions may not have this feature so only enable it
 		 * when we know we're compiling with included static libusb. We
 		 * only do this for bulk transfer, not interrupt. */
-		if (!interrupt)
+		if (!cgpu->nozlp && !interrupt)
 			ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
 #endif
 #ifdef WIN32
@@ -2954,6 +3089,7 @@ err_retry:
 	}
 	if (err == LIBUSB_ERROR_IO && ++err_retries < USB_RETRY_MAX)
 		goto err_retry;
+out_fail:
 	if (NODEV(err))
 		*transferred = 0;
 	else if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN && *transferred)
@@ -3566,6 +3702,8 @@ void usb_cleanup(void)
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:
+			case DRIVER_avalon2:
+			case DRIVER_avalon4:
 			case DRIVER_klondike:
 			case DRIVER_hashfast:
 				DEVWLOCK(cgpu, pstate);

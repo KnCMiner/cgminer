@@ -4092,6 +4092,8 @@ static void lcddata(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 #ifdef USE_KNC
+int knc_change_die_state(void* driver_data, int asic_id, int die_id, bool enable);
+
 static void knc_configure_die(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (param == NULL || *param == '\0') {

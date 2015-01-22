@@ -458,7 +458,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_DIECHANGEERR 127
 #define MSG_INVDIE 128
 #define MSG_DIEWRONGFORMAT 129
-#define MSG_DIEWRONGPARAM 130
+#define MSG_INVASIC 130
 #endif /* USE_KNC */
 
 enum code_severity {
@@ -629,10 +629,13 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_LOCKOK,	PARAM_NONE,	"Lock stats created" },
  { SEVERITY_WARN,  MSG_LOCKDIS,	PARAM_NONE,	"Lock stats not enabled" },
 #ifdef USE_KNC
+#define xstr(s) _stringify_stage1_(s)
+#define _stringify_stage1_(s) #s
  { SEVERITY_SUCC,  MSG_DIECHANGEOK, PARAM_STR, "Die was successfully %s" },
  { SEVERITY_ERR,   MSG_DIECHANGEERR, PARAM_NONE, "Failed to change die state" },
- { SEVERITY_ERR,   MSG_INVDIE, PARAM_INT, "Invalid DIE id %d - range is 0..3" },
+ { SEVERITY_ERR,   MSG_INVDIE, PARAM_INT, "Invalid DIE id %d: range is 0 <= id < " xstr(KNC_MAX_DIES_PER_ASIC) },
  { SEVERITY_ERR,   MSG_DIEWRONGFORMAT,	PARAM_NONE,	"Wrong format. Format should be: ASIC=N;DIE=N;MODE:ENABLE;" },
+ { SEVERITY_ERR,   MSG_INVASIC, PARAM_INT, "Invalid ASIC id %d: range is 0 <= id < " xstr(KNC_MAX_ASICS) },
 #endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
@@ -4125,7 +4128,7 @@ static void knc_configure_die(struct io_data *io_data, __maybe_unused SOCKETTYPE
 
 			asic_id = atoi(semi);
 			if (asic_id < 0 || asic_id >= KNC_MAX_ASICS) {
-				message(io_data, MSG_INVASC, asic_id, NULL, isjson);
+				message(io_data, MSG_INVASIC, asic_id, NULL, isjson);
 				return;
 			}
 			param = scolon;

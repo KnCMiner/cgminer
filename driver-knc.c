@@ -264,11 +264,11 @@ static bool knc_detect_one(void *ctx)
 	}
 
 	if (!cores) {
-		applog(LOG_NOTICE, "no KnCminer cores found");
+		applog(LOG_ERR, "no KnCminer cores found");
 		return false;
 	}
 
-	applog(LOG_ERR, "Found a KnC miner with %d cores", cores);
+	applog(LOG_NOTICE, "Found a KnC miner with %d cores", cores);
 
 	cgpu = calloc(1, sizeof(*cgpu));
 	knc = calloc(1, sizeof(*knc));

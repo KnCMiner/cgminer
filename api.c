@@ -634,7 +634,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_DIECHANGEOK, PARAM_STR, "Die was successfully %s" },
  { SEVERITY_ERR,   MSG_DIECHANGEERR, PARAM_NONE, "Failed to change die state" },
  { SEVERITY_ERR,   MSG_INVDIE, PARAM_INT, "Invalid DIE id %d: range is 0 <= id < " xstr(KNC_MAX_DIES_PER_ASIC) },
- { SEVERITY_ERR,   MSG_DIEWRONGFORMAT,	PARAM_NONE,	"Wrong format. Format should be: ASIC=N;DIE=N;MODE:ENABLE;" },
+ { SEVERITY_ERR,   MSG_DIEWRONGFORMAT,	PARAM_NONE,	"Wrong format. Format should be: ASIC:N;DIE:N;MODE:ENABLE;" },
  { SEVERITY_ERR,   MSG_INVASIC, PARAM_INT, "Invalid ASIC id %d: range is 0 <= id < " xstr(KNC_MAX_ASICS) },
 #endif
  { SEVERITY_FAIL, 0, 0, NULL }

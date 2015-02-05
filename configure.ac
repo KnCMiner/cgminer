@@ -2,7 +2,7 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
 m4_define([v_min], [9])
-m4_define([v_mic], [0])
+m4_define([v_mic], [1])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -104,6 +104,11 @@ case $target in
     PTHREAD_FLAGS=""
     RT_LIBS=""
 	;;
+  *-*-freebsd*)
+    PTHREAD_FLAGS=""
+    DLOPEN_FLAGS=""
+    RT_LIBS=""
+    ;;
 esac
 
 has_winpthread=false

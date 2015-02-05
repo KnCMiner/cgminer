@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 Con Kolivas
+ * Copyright 2011-2015 Con Kolivas
  * Copyright 2011-2012 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
@@ -166,7 +166,6 @@ int opt_queue = 1;
 static int max_queue = 1;
 int opt_scantime = -1;
 int opt_expiry = 120;
-static const bool opt_time = true;
 unsigned long long global_hashrate;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
@@ -4797,17 +4796,6 @@ static bool block_exists(char *hexstr)
 	return false;
 }
 
-/* Tests if this work is from a block that has been seen before */
-static inline bool from_existing_block(struct work *work)
-{
-	char *hexstr = bin2hex(work->data + 8, 18);
-	bool ret;
-
-	ret = block_exists(hexstr);
-	free(hexstr);
-	return ret;
-}
-
 static int block_sort(struct block *blocka, struct block *blockb)
 {
 	return blocka->block_no - blockb->block_no;
@@ -8842,6 +8830,8 @@ static void *test_pool_thread(void *arg)
 	if (!pool->blocking)
 		pthread_detach(pthread_self());
 retry:
+	if (pool->removed)
+		goto out;
 	if (pool_active(pool, false)) {
 		pool_tset(pool, &pool->lagging);
 		pool_tclear(pool, &pool->idle);
@@ -8868,7 +8858,7 @@ retry:
 	}
 
 	pool->testing = false;
-
+out:
 	return NULL;
 }
 

@@ -65,6 +65,7 @@ struct knc_core_state {
 		int slot;
 		uint32_t nonce;
 	} last_nonce;
+	uint32_t last_nonce_verified;
 	uint32_t works;
 	uint32_t shares;
 	uint32_t errors;
@@ -528,7 +529,7 @@ static void knc_core_failure(struct knc_core_state *core)
 	}
 }
 
-static void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, int slot, uint32_t nonce)
+static void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, int slot, uint32_t nonce, bool comm_errors)
 {
 	int i;
 	if (!slot)
@@ -539,15 +540,21 @@ static void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *c
 		return;
 	for (i = 0; i < WORKS_PER_CORE; i++) {
 		if (slot == core->workslot[i].slot && core->workslot[i].work) {
-			applog(LOG_INFO, "KnC: %d.%d.%d found nonce %08x", core->die->channel, core->die->die, core->core, nonce);
+			char *comm_err_str = comm_errors ? " (comm error)" : "";
+			applog(LOG_INFO, "KnC: %d.%d.%d found nonce %08x%s", core->die->channel, core->die->die, core->core, nonce, comm_err_str);
 			if (submit_nonce(thr, core->workslot[i].work, nonce)) {
-				/* Good share */
-				core->shares++;
-				core->die->knc->shares++;
+				if (nonce != core->last_nonce_verified) {
+					/* Good share */
+					core->shares++;
+					core->die->knc->shares++;
+					core->last_nonce_verified = nonce;
+				} else {
+					applog(LOG_INFO, "KnC: %d.%d.%d duplicate nonce %08x%s", core->die->channel, core->die->die, core->core, nonce, comm_err_str);
+				}
 				/* This core is useful. Ignore any errors */
 				core->errors_now = 0;
 			} else {
-				applog(LOG_INFO, "KnC: %d.%d.%d hwerror nonce %08x", core->die->channel, core->die->die, core->core, nonce);
+				applog(LOG_INFO, "KnC: %d.%d.%d hwerror nonce %08x%s", core->die->channel, core->die->die, core->core, nonce, comm_err_str);
 				/* Bad share */
 				knc_core_failure(core);
 			}
@@ -555,7 +562,7 @@ static void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *c
 	}
 }
 
-static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response)
+static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response, bool comm_errors)
 {
 	struct knc_report *report = &core->report;
 	knc_decode_report(response, report, core->die->version);
@@ -570,43 +577,45 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 			break;
 	}
 	while(n-- > 0) {
-		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce);
+		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce, comm_errors);
 	}
 
-	if (report->active_slot && core->workslot[0].slot != report->active_slot) {
-		had_event = true;
-		applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
-		/* Core switched to next work */
-		if (core->workslot[0].work) {
-			core->die->knc->completed++;
-			core->completed++;
-			applog(LOG_INFO, "KnC: Work completed on core %d.%d.%d!", core->die->channel, core->die->die, core->core);
-			free_work(core->workslot[0].work);
-		}
-		core->workslot[0] = core->workslot[1];
-		core->workslot[1].work = NULL;
-		core->workslot[1].slot = -1;
-
-		/* or did it switch directly to pending work? */
-		if (report->active_slot == core->workslot[2].slot) {
-			applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
-			if (core->workslot[0].work)
+	if (!comm_errors) {
+		if (report->active_slot && core->workslot[0].slot != report->active_slot) {
+			had_event = true;
+			applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+			/* Core switched to next work */
+			if (core->workslot[0].work) {
+				core->die->knc->completed++;
+				core->completed++;
+				applog(LOG_INFO, "KnC: Work completed on core %d.%d.%d!", core->die->channel, core->die->die, core->core);
 				free_work(core->workslot[0].work);
-			core->workslot[0] = core->workslot[2];
+			}
+			core->workslot[0] = core->workslot[1];
+			core->workslot[1].work = NULL;
+			core->workslot[1].slot = -1;
+
+			/* or did it switch directly to pending work? */
+			if (report->active_slot == core->workslot[2].slot) {
+				applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+				if (core->workslot[0].work)
+					free_work(core->workslot[0].work);
+				core->workslot[0] = core->workslot[2];
+				core->workslot[2].work = NULL;
+				core->workslot[2].slot = -1;
+			}
+		}
+
+		if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
+			had_event = true;
+			applog(LOG_INFO, "KnC: Accepted work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+			/* core accepted next work */
+			if (core->workslot[1].work)
+				free_work(core->workslot[1].work);
+			core->workslot[1] = core->workslot[2];
 			core->workslot[2].work = NULL;
 			core->workslot[2].slot = -1;
 		}
-	}
-
-	if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
-		had_event = true;
-		applog(LOG_INFO, "KnC: Accepted work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
-		/* core accepted next work */
-		if (core->workslot[1].work)
-			free_work(core->workslot[1].work);
-		core->workslot[1] = core->workslot[2];
-		core->workslot[2].work = NULL;
-		core->workslot[2].slot = -1;
 	}
 
 	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
@@ -639,11 +648,14 @@ static void knc_process_responses(struct thr_info *thr)
 			/* Invert KNC_ACCEPTED to simplify logics below */
 			if (response_info->type == KNC_SETWORK && !KNC_IS_ERROR(status))
 				status ^= KNC_ACCEPTED;
+			bool comm_errors = false;
 			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
-				applog(LOG_INFO, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
-				if (status == KNC_ACCEPTED) {
+				if (response_info->type == KNC_SETWORK && status == KNC_ACCEPTED) {
 					/* Core refused our work vector. Likely out of sync. Reset it */
 					core->inuse = false;
+				} else {
+					applog(LOG_INFO, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
+					comm_errors = true;
 				}
 				knc_core_failure(core);
 			}
@@ -651,7 +663,7 @@ static void knc_process_responses(struct thr_info *thr)
 			case KNC_REPORT:
 			case KNC_SETWORK:
 				/* Should we care about failed SETWORK explicit? Or simply handle it by next state not loaded indication in reports?  */
-				knc_core_process_report(thr, core, rxbuf);
+				knc_core_process_report(thr, core, rxbuf, comm_errors);
 				break;
 			/* Make compiler happy by enumerating all possible values */
 			case KNC_UNKNOWN:
